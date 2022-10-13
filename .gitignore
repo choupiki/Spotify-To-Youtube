@@ -1,0 +1,7 @@
+.env
+.cache
+.DS_Store
+**/__pycache__/*
+./*.egg-info
+temp_files
+service.json

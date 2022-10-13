@@ -1,0 +1,10 @@
+spotipy
+pandas
+numpy
+dotenv
+flask
+html5lib
+requests
+requests_html
+pathlib
+beautifulsoup4
