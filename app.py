@@ -1,4 +1,4 @@
-from flask import Flask, url_for, session, request, redirect, jsonify
+from flask import Flask, url_for, session, request, redirect, jsonify, render_template, flash
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from config import Config
@@ -31,10 +31,14 @@ def redirectPage():
     code = request.args.get('code')
     token_info = sp_oauth.get_access_token(code)
     session[TOKEN_INFO] = token_info
-    return redirect(url_for("getTracks", _external=True))
+    return redirect(url_for("playlistSelect", _external=True))
 
+@app.route('/playlistselect')
+def playlistSelect():
+    flash("Please enter the link for the Spotify playlist you wish to convert: ")
+    return render_template("playlistselect.html")
 
-@app.route('/getTracks')
+@app.route('/getTracks', methods=["POST", "GET"])
 def getTracks():
     try:
         token_info = get_token()
@@ -43,9 +47,9 @@ def getTracks():
         return redirect(url_for('login', _external=False))
     
     sp = spotipy.Spotify(auth=token_info['access_token'])
-    
-    # playlist_link = input('Playlist Link: ')
-    playlist_link = 'https://open.spotify.com/playlist/5A8qAM27k3KvDaIyJ97HER?si=080d4a4c1a6a4b81'
+    playlist_link = request.form['playlist_link']
+    #]playlist_link = input('Playlist Link: ')
+    # playlist_link = 'https://open.spotify.com/playlist/5A8qAM27k3KvDaIyJ97HER?si=080d4a4c1a6a4b81'
     playlist_uri = playlist_link.split("/")[-1].split("?")[0]
     track_uris = []
     track_names = []
@@ -74,7 +78,9 @@ def getTracks():
     print(df)
     os.makedirs('temp_files', exist_ok=True)  
     df.to_csv('temp_files/playlist_data.csv')
+    
     return redirect(url_for('ytLogin', _external=True))
+    #return render_template("getTracks.html")
 
 def get_token():
     token_info = session.get(TOKEN_INFO, None)
@@ -140,10 +146,14 @@ def ytAuth():
     credentials = flow.credentials
     session['credentials'] = credentials_to_dict(credentials)
     
-    return redirect(url_for('mkPlaylist', _external=True))
+    return redirect(url_for('playlistName', _external=True))
 
+@app.route('/nameplaylist')
+def playlistName():
+    flash("What would you like to call your Youtube playlist? ")
+    return render_template("playlistname.html")
 
-@app.route('/create_yt_playlist')
+@app.route('/create_yt_playlist', methods=["POST", "GET"])
 def mkPlaylist():
     # Check authorized
     if 'credentials' not in session:
@@ -152,7 +162,8 @@ def mkPlaylist():
     credentials = google.oauth2.credentials.Credentials(
         **session['credentials'])
     # Instantiate playlist data
-    playlist_title = input('Name new playlist: ')
+    playlist_title = request.form['playlist_name']
+    #playlist_title = input('Name new playlist: ')
     songs_df = pd.read_csv('temp_files/playlist_data.csv')
     song_title = songs_df['Track'][0]
     artist = songs_df['Artists'][0]
@@ -162,16 +173,19 @@ def mkPlaylist():
     # Call functions
     mkList_resp = mkList(credentials, playlist_title)
     playlistId = mkList_resp['id']
-    # for loop goes here 
-    response = popList(credentials, playlistId, song_title, artist)
-    #response = listVids(credentials)
-    #response = mkList(credentials)
+    # Add videos to above created playlist
+    for i in range(len(songs_df['Track'])):
+        iter_response = popList(credentials, playlistId, songs_df['Track'][i], songs_df['Artists'][i])
+        print(iter_response)
+    print(str(i) + "Tracks added")
     
+    #response = listVids(credentials)
     # Save Creds again
     
     session['credentials'] = credentials_to_dict(credentials)
 
-    return jsonify(**response)
+    #return jsonify(**response)
+    return 'complete!'
 
 
 

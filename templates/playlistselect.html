@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Spotify to Youtube Playlist Converter</title>
+    </head>
+    <body>
+        <form action="getTracks" method="post">
+            {% for message in get_flashed_messages() %}
+            <p> {{message}} </p> 
+            {% endfor %}
+            <br>
+            <input type="text" name="playlist_link">
+            <br>
+            <input type="submit" value="Convert!" id="getTracks">
+        </form>
+    
+
+
+
+
+
+
+
+
+
+    </body>
+</html>
