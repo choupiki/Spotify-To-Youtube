@@ -1,4 +1,5 @@
 from flask import Flask, url_for, session, request, redirect, jsonify, render_template, flash
+from flask_session import Session
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from config import Config
@@ -9,11 +10,12 @@ import pandas as pd
 import os
 import google_auth_oauthlib
 import google.oauth2
+import random 
 
 
 app = Flask(__name__)
-
 app.config.from_object(Config)
+Session(app)
 TOKEN_INFO = 'token_info'
 YT_TOKEN_INFO = 'yt token info'
 
@@ -46,9 +48,15 @@ def getTracks():
         print('Not logged in')
         return redirect(url_for('login', _external=False))
     
+    ref_list= 'https://open.spotify.com/playlist/5ZqLP6lOzeimIVbl3ol35m?si=3bf9e243579a40fa'
+    trackList(token_info=token_info, playlist_link=ref_list, opt=2)
+    trackList(token_info=token_info, playlist_link=request.form['playlist_link'], opt=1)
+    return redirect(url_for('ytLogin', _external=True))
+
+    
+def trackList(token_info, playlist_link, opt):
     sp = spotipy.Spotify(auth=token_info['access_token'])
-    playlist_link = request.form['playlist_link']
-    #]playlist_link = input('Playlist Link: ')
+    # playlist_link = input('Playlist Link: ')
     # playlist_link = 'https://open.spotify.com/playlist/5A8qAM27k3KvDaIyJ97HER?si=080d4a4c1a6a4b81'
     playlist_uri = playlist_link.split("/")[-1].split("?")[0]
     track_uris = []
@@ -77,10 +85,12 @@ def getTracks():
     df = pd.DataFrame.from_dict(playlist_dict)
     print(df)
     os.makedirs('temp_files', exist_ok=True)  
-    df.to_csv('temp_files/playlist_data.csv')
-    
-    return redirect(url_for('ytLogin', _external=True))
-    #return render_template("getTracks.html")
+    if opt==1:
+        return df.to_csv('temp_files/playlist_data.csv')
+    if opt==2:
+        return df.to_csv('temp_files/ref_list.csv')
+    else:
+        return 'Invalid Entry for Option: opt'
 
 def get_token():
     token_info = session.get(TOKEN_INFO, None)
@@ -171,22 +181,23 @@ def mkPlaylist():
     print(artist)
     
     # Call functions
+    
     mkList_resp = mkList(credentials, playlist_title)
     playlistId = mkList_resp['id']
+    session['playlistId'] = playlistId
     # Add videos to above created playlist
     for i in range(len(songs_df['Track'])):
         iter_response = popList(credentials, playlistId, songs_df['Track'][i], songs_df['Artists'][i])
         print(iter_response)
     print(str(i) + "Tracks added")
     
-    #response = listVids(credentials)
+    """response = listVids(credentials)"""
     # Save Creds again
     
     session['credentials'] = credentials_to_dict(credentials)
 
     #return jsonify(**response)
-    return 'complete!'
-
+    return redirect(url_for('completePage', _external=True))
 
 
 def listVids(credentials):
@@ -195,14 +206,12 @@ def listVids(credentials):
     request = youtube.playlistItems().list(
         part='snippet',
         playlistId='PL11reovxTQ5tgpOAlMzvV2sgOqsVPbO9a'
-
     )
 
     response = request.execute()
     print(response)
     youtube.close()
     return response
-
 
 def mkList(credentials, title):
     youtube = build('youtube', 'v3', credentials=credentials)
@@ -212,6 +221,7 @@ def mkList(credentials, title):
         body={
             'snippet': {
                 'title': title,
+                'privacyStatus': 'public',
                 'description': "Playlist converted from Spotify account by Sp2Yt"
                 }
               }
@@ -245,12 +255,9 @@ def popList(credentials, playlistId, song_title, artist):
         }  }  
     )
     add_resp = add_req.execute()
-    print(add_resp)
+    #print(add_resp)
     youtube.close()
-    return 'popListResponse'
-
-
-
+    return add_resp["snippet"]["title"]
 
 def credentials_to_dict(credentials):
   return {'token': credentials.token,
@@ -259,5 +266,35 @@ def credentials_to_dict(credentials):
           'client_id': credentials.client_id,
           'client_secret': credentials.client_secret,
           'scopes': credentials.scopes}
+  
+def findRandomVideo(song_df):
+    credentials = google.oauth2.credentials.Credentials(
+    **session['credentials'])
+    youtube = build('youtube', 'v3', credentials=credentials)
+    rand = random.randint(0, len(song_df['Track']))
+    song_title = song_df['Track'][rand]
+    artist = song_df['Artists'][rand]
+    # Create search request for YT
+    search_req = youtube.search().list(
+    q = song_title + ' ' + artist,
+    part="snippet",
+    type = 'video'
+    )
+    search_resp = search_req.execute()
+    # Add to playlist request
+    top_vid = search_resp['items'][0]
+    videoId = top_vid['id']['videoId']
+    return videoId
 
+@app.route("/endpage", methods=["POST", "GET"])
+def completePage():
+    static_songs_df = pd.read_csv('temp_files/playlist_data.csv')
+    static_video_id = findRandomVideo(song_df=static_songs_df)
+    playlistId = session.get('playlistId', 'Unable')
+    flash("Press button if you wish to convert another", "form")
+    flash('https://youtube.com/embed/' + str(static_video_id), "static_link")
+    flash('https://youtube.com/embed/playlist?list=' + str(playlistId), "link")
+    return render_template("endpage.html")
 
+if __name__ == "__main__":
+    app.run()
