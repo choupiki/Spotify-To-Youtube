@@ -5,3 +5,4 @@
 ./*.egg-info
 temp_files
 service.json
+flask_session
