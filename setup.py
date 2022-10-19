@@ -9,7 +9,12 @@ requires = ['spotipy',
             'requests',
             'requests_html',
             'pathlib',
-            'beautifulsoup4'
+            'beautifulsoup4',
+            'google_auth_oauthlib',
+            'google.oauth2',
+            'googleapiclient',
+            'authlib',
+            'flask-session'
 ]
 
 
