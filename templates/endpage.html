@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Spotify to Youtube Playlist Converter</title>
+        <link rel="stylesheet" 
+        href="{{url_for('static', filename='css/main.css')}}">
+    </head>
+    <body>
+        <p class="heading"> Sp2Yt </p>
+        <p class="subheading"> By Oscar Hallman </p>
+        <br>
+        <form action="/playlistselect" method="get">
+            {% with form = get_flashed_messages(category_filter=["form"]) %}
+            {% if form %}
+            {% for msg in form %}
+            <p> {{msg}} </p> 
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+            <br>
+            <input type="submit" value="Again" id="return">
+        </form>
+        <br>
+        <p>One of my favourite tracks &#128578;</p>
+        <iframe width="420" height="315"
+        src="https://youtube.com/embed/8J0KBM2xK4w">
+        </iframe>
+        {% with link = get_flashed_messages(category_filter=["link"]) %}
+        {% if link %}
+        {% for msg in link %}
+        <p>Link to your new playlist:</p>
+        <p> {{msg}} </p> 
+        <iframe width="420" height="315"
+        src={{msg}}>
+    </iframe>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </body>
+</html>

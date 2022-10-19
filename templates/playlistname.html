@@ -3,8 +3,13 @@
     <head>
         <meta charset="UTF-8">
         <title>Spotify to Youtube Playlist Converter</title>
+        <link rel="stylesheet" 
+        href="{{url_for('static', filename='css/main.css')}}">
     </head>
     <body>
+        <p class="heading"> Sp2Yt </p>
+        <p class="subheading"> By Oscar Hallman </p>
+        <br>
         <form action="create_yt_playlist" method="post">
             {% for message in get_flashed_messages() %}
             <p> {{message}} </p> 
