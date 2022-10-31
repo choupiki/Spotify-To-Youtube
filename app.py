@@ -11,7 +11,9 @@ import os
 import google_auth_oauthlib
 import google.oauth2
 import random 
-
+import re
+import spotifyAuxFunctions as spauxfn
+import youtubeAuxFunctions as ytauxfn
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -21,14 +23,14 @@ YT_TOKEN_INFO = 'yt token info'
 
 @app.route('/')
 def login():
-    sp_oauth = create_spotify_oauth()
+    sp_oauth = spauxfn.create_spotify_oauth()
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
 
 
 @app.route('/redirect')
 def redirectPage():
-    sp_oauth = create_spotify_oauth()
+    sp_oauth = spauxfn.create_spotify_oauth()
     session.clear()
     code = request.args.get('code')
     token_info = sp_oauth.get_access_token(code)
@@ -40,6 +42,11 @@ def playlistSelect():
     flash("Please enter the link for the Spotify playlist you wish to convert: ")
     return render_template("playlistselect.html")
 
+@app.route('/retryplaylistselect')
+def retryplaylistSelect():
+    flash("Invalid URL. Please try enter valid Spotify URL")
+    return render_template("retryplaylistselect.html")
+
 @app.route('/getTracks', methods=["POST", "GET"])
 def getTracks():
     try:
@@ -49,49 +56,14 @@ def getTracks():
         return redirect(url_for('login', _external=False))
     
     ref_list= 'https://open.spotify.com/playlist/5ZqLP6lOzeimIVbl3ol35m?si=3bf9e243579a40fa'
-    trackList(token_info=token_info, playlist_link=ref_list, opt=2)
-    trackList(token_info=token_info, playlist_link=request.form['playlist_link'], opt=1)
-    return redirect(url_for('ytLogin', _external=True))
-
-    
-def trackList(token_info, playlist_link, opt):
-    sp = spotipy.Spotify(auth=token_info['access_token'])
-    # playlist_link = input('Playlist Link: ')
-    # playlist_link = 'https://open.spotify.com/playlist/5A8qAM27k3KvDaIyJ97HER?si=080d4a4c1a6a4b81'
-    playlist_uri = playlist_link.split("/")[-1].split("?")[0]
-    track_uris = []
-    track_names = []
-    artist_names = []
-    albums = []
-    
-    for track in sp.playlist_tracks(playlist_uri)["items"]:
-        #URI
-        track_uris.append(track["track"]["uri"]) 
-        #Track name
-        track_names.append(track["track"]["name"])    
-        #Name, popularity, genre
-        artist_names.append(track["track"]["artists"][0]["name"])    
-        #Album
-        albums.append(track["track"]["album"]["name"])
-    
-    playlist_dict = {
-        "URIs": track_uris,
-        "Track": track_names,
-        "Artists": artist_names,
-        "Albums": albums
-    }
-    
-    
-    df = pd.DataFrame.from_dict(playlist_dict)
-    print(df)
-    os.makedirs('temp_files', exist_ok=True)  
-    if opt==1:
-        return df.to_csv('temp_files/playlist_data.csv')
-    if opt==2:
-        return df.to_csv('temp_files/ref_list.csv')
+    spauxfn.trackList(token_info=token_info, playlist_link=ref_list, opt=2)
+    validate_url = re.search("^https:\/\/[a-z]+\.spotify\.com", request.form['playlist_link'])
+    if not validate_url == None:
+        spauxfn.trackList(token_info=token_info, playlist_link=validate_url.string, opt=1)
+        return redirect(url_for('ytLogin', _external=True))
     else:
-        return 'Invalid Entry for Option: opt'
-
+        return redirect(url_for('retryplaylistSelect', _external=True))     
+    
 def get_token():
     token_info = session.get(TOKEN_INFO, None)
     if not token_info:
@@ -99,18 +71,9 @@ def get_token():
     now = int(time.time()) 
     is_expired = token_info['expires_at'] - now < 60 
     if (is_expired):
-        sp_oauth = create_spotify_oauth()
+        sp_oauth = spauxfn.create_spotify_oauth()
         token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
     return token_info
-
-
-def create_spotify_oauth():
-        return SpotifyOAuth(
-            client_id=Config.CLIENT_ID,
-            client_secret=Config.SECRET_KEY,
-            redirect_uri=url_for("redirectPage", _external=True),
-            scope='user-library-read'
-        )
 
 # Youtube Execution
 # When running locally, disable OAuthlib's HTTPs verification.
@@ -122,7 +85,8 @@ scopes = ["https://www.googleapis.com/auth/userinfo.profile",
           "https://www.googleapis.com/auth/userinfo.email",
           "https://www.googleapis.com/auth/youtube openid"]
 
-# Flask routes
+
+# Google Flask routes
 @app.route('/yt')
 def yt():
     return 'yt'
@@ -271,7 +235,7 @@ def findRandomVideo(song_df):
     credentials = google.oauth2.credentials.Credentials(
     **session['credentials'])
     youtube = build('youtube', 'v3', credentials=credentials)
-    rand = random.randint(0, len(song_df['Track']))
+    rand = random.randint(0, len(song_df['Track'])-1)
     song_title = song_df['Track'][rand]
     artist = song_df['Artists'][rand]
     # Create search request for YT
@@ -288,12 +252,13 @@ def findRandomVideo(song_df):
 
 @app.route("/endpage", methods=["POST", "GET"])
 def completePage():
-    static_songs_df = pd.read_csv('temp_files/playlist_data.csv')
+    static_songs_df = pd.read_csv('temp_files/ref_list.csv')
     static_video_id = findRandomVideo(song_df=static_songs_df)
     playlistId = session.get('playlistId', 'Unable')
     flash("Press button if you wish to convert another", "form")
     flash('https://youtube.com/embed/' + str(static_video_id), "static_link")
     flash('https://youtube.com/embed/playlist?list=' + str(playlistId), "link")
+    os.remove("temp_files/playlist_data"+".csv")
     return render_template("endpage.html")
 
 if __name__ == "__main__":
